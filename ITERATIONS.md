@@ -85,3 +85,53 @@ Iteration 3 alongside the strict-greater interaction.
 
 **Next**: as queued (It 3 continues: full legality theorems; It 4
 fill-sim; It 5 C++ bridge; It 6–8 viper; It 9 symmetry; It 10 matrix).
+
+## Iteration 3 (2026-10-31)
+
+**Research**: the no-suicide rule's formal content — CodeCup's variant
+rule ("we forbid moves where the opponent can immediately (re-)capture
+the last played stack") and its Go counterpart. No other ecosystem
+formalizes this rule; it is CodeCup-invented for judge termination and
+the formalization is novel spec content.
+
+**Spec**: `legalPlacement` defined — on-board, sees ≥ 1 friend,
+no immediate recapture (`seen me ≥ seen opp`), strict-greater
+capture/upgrade.
+
+**Lean proof**: `no_immediate_recapture` — post-placement, the
+opponent's sightline count at `c` is ≤ yours (two `seen_place_self`
+rewrites), so a capture (count strictly greater than your placed value)
+is impossible. Plus the full corollary `no_immediate_recapture_legal`
+(¬legalPlacement on the placed board). Proof-engineering finding: the
+legality's own no-suicide conjunct provides the contradiction via
+`omega`; the `me = Color.empty` disjunct closes by `hme`.
+
+**Status**: build green, zero sorries. Iteration 4/10.
+
+**Next**: It 4 fill-scanner soundness + completeness; It 5 territory
+fill saturation; It 6+ viper.
+
+## Iteration 4 (2026-10-31)
+
+**Research**: scanner soundness/completeness proof patterns (structure
+of decidable list scanners) and the row-major fill order as an
+*approximation* of the judge's unpublished fill order.
+
+**Spec**: `legalPlacementB` (decision form) + reflection lemma
+`legalPlacementB_iff`; `cellList` (all 91 cells, row-major);
+`fillStepScan` (the scanner); `fillStep`; fuel-bounded `fill`.
+
+**Lean proof**: `fillStepScan_sound` — a returned board is a legal
+placement on a scanned cell; `fillStepScan_complete` — a `none` return
+means no scanned cell admits a legal placement. Proof-engineering:
+`split at h` produces the Bool-equality hypotheses (`= true` / `= false`)
+directly; `Option.noConfusion` closes the impossible `some = none`; the
+membership side-conditions close without `rcases rfl` substitution
+(which eliminates the head binder and breaks later references).
+
+**Status**: build green, zero sorries. Iteration 5/10.
+
+**Next**: It 5 totalValue monotonicity + fill saturation (fuel
+sufficiency via the strictly-increasing total); It 6 C++ conformance
+bridge (property tests mirroring each lemma); It 7–9 viper safety; It 10
+symmetry + extraction matrix.
