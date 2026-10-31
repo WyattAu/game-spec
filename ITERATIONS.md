@@ -167,3 +167,35 @@ non-zero values, well-formed boards never do.
 **Next**: It 6 fill saturation theorem (fuel 547 suffices — needs
 `totalValue ≤ 546` via `seen ≤ 6` per cell and `Dir.all.length = 6`) +
 the C++ conformance bridge; It 7–9 viper; It 10 symmetry + matrix.
+
+## Iteration 6 (2026-10-31)
+
+**Research**: termination chains for bounded state machines — TigerBeetle's
+monotone-resource arguments, the well-founded decay principle, and the
+`Option.bind` early-exit idiom.
+
+**Spec**: the complete termination chain, all machine-proved:
+- `seen_le_six` — a sightline count is ≤ 6 (one friendly stack per direction)
+- `totalValue_le_bound` — total value ≤ 6 × (number of cells) = 546
+- `place_zero_ok` / `place_bound_ok` — placements preserve the two board
+  invariants (empty-cells-carry-zero; per-stack value ≤ 6)
+- `fillStep_increase` — a scanner placement strictly increases the total
+- `fill_mono` — fuel-bounded fill never decreases the total (invariants
+  carried through every step)
+
+**Analysis**: the composition `fillStepScan_sound` →
+`totalValue_place_gt` is the load-bearing path — scanner soundness feeds
+the increase theorem's legality, and the increase feeds the monotonicity
+induction. Combined with the bound, this yields the saturation argument:
+547 fuel always suffices (Iteration 7 formalizes the final statement).
+
+**Model catch**: the increase theorem required `hpos : 0 ≤ (b c).value`
+(the target stack's value is non-negative) — without it, `natAbs` breaks
+the monotone story for negative enemy stacks. Game-realistic (Tumbleweed
+values are positive counts) and now pinned in the model.
+
+**Status**: build green, zero sorries. Iteration 7/10.
+
+**Next**: It 7 — the saturation statement itself (`fillStep (fill 547 b me) me cellList = none`)
+via the counting induction; It 8 — viper safety; It 9 — symmetry; It 10 —
+extraction matrix.
