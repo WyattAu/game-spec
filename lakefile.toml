@@ -1,0 +1,7 @@
+name = "game-spec"
+version = "0.1.0"
+defaultTargets = ["GameSpec"]
+
+[[lean_lib]]
+name = "GameSpec"
+srcDir = "src"

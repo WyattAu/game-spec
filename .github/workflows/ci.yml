@@ -1,0 +1,19 @@
+name: quality
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  lean:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: leanprover/lean-action@v1
+        with:
+          auto-config: true
+      - name: Proof gate — build must be green AND sorry-free
+        run: |
+          lake build 2>&1 | tee build.log
+          ! grep -q "declaration uses" build.log
