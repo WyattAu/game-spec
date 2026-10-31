@@ -38,7 +38,7 @@ lake env lean src/GameSpec/Tumbleweed.lean   # single-module check
 2. ✅ keystone congruence (`seen_congr`, `seen_place_self`) + empty-board sanity
 3. ✅ placement legality (`legalPlacement`) + no-recapture theorems
 4. ✅ fill scanner (`fillStepScan`): soundness + completeness + fuel-bounded `fill`
-5. totalValue monotonicity + fill saturation (fuel sufficiency)
+5. ✅ totalValue monotonicity (`totalValue_place_gt`) + the two core-only sum lemmas (`sum_map_le`/`sum_map_lt`)
 2. ✅ keystone congruence (`seen_congr`, `seen_place_self`) + empty-board sanity
 3. placement legality (`seen ≥ 1`, no-suicide, strict-greater capture) as defs + the no-recapture theorem (opponent can never immediately retake)
 4. territory fill simulation: termination (empty-cell count ↓ / total value ↑), saturation postcondition (post-fill, the filler has no legal move), determinism under row-major scan

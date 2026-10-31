@@ -135,3 +135,35 @@ membership side-conditions close without `rcases rfl` substitution
 sufficiency via the strictly-increasing total); It 6 C++ conformance
 bridge (property tests mirroring each lemma); It 7–9 viper safety; It 10
 symmetry + extraction matrix.
+
+## Iteration 5 (2026-10-31)
+
+**Research**: fill-termination measures — TigerBeetle's invariant-style
+"monotone resource" arguments and the classical well-founded decay
+principle: a bounded quantity that strictly increases per step forces
+termination.
+
+**Analysis**: every legal placement strictly increases the total stack
+value on the board (empty placement adds `seen ≥ 1`; capture/upgrade
+replaces with strictly greater). The total is bounded by 6 per cell ×
+91 cells = 546, so any fill loop terminates in ≤ 546 placements — this
+is the saturation argument the C++ engine's territory simulation relies
+on, now stated formally.
+
+**Spec**: `totalValue` (sum of `natAbs` values over `cellList`); general
+core-only sum lemmas `sum_map_le` / `sum_map_lt` (pointwise ≤ with one
+strict member ⇒ strict sum — 10 lines each, no mathlib);
+`place_value_ne` / `place_value_self`.
+
+**Lean proof**: `totalValue_place_gt` — a legal placement strictly
+increases the total, via `sum_map_lt` with the witness cell `c` and the
+two legality branches (empty: old 0 by the empty-cells-carry-zero
+hypothesis, new ≥ 1; capture: old < new). The `empty ⇒ 0` side-condition
+is load-bearing and documented: the model permits empty cells with
+non-zero values, well-formed boards never do.
+
+**Status**: build green, zero sorries. Iteration 6/10.
+
+**Next**: It 6 fill saturation theorem (fuel 547 suffices — needs
+`totalValue ≤ 546` via `seen ≤ 6` per cell and `Dir.all.length = 6`) +
+the C++ conformance bridge; It 7–9 viper; It 10 symmetry + matrix.

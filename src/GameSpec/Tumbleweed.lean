@@ -160,6 +160,76 @@ theorem seen_place_self (b : Board) (c : Cell) (s : Stack) (color : Color) :
   · next h => exact absurd h hx
   · rfl
 
+/-! ## The total value — the fill-termination measure (Iteration 5)
+
+Every legal placement strictly increases the total value on the board:
+an empty-cell placement adds `value = seen ≥ 1`; a capture/upgrade
+replaces a stack with a strictly larger one. The total is bounded above
+(≤ 6 per cell × 91 cells), so fuel-bounded fill saturates. -/
+
+/-- Per-cell value agreement: placement changes only cell `c`. -/
+theorem place_value_ne (b : Board) (c : Cell) (s : Stack) (x : Cell) (hx : x ≠ c) :
+    (place b c s x).value = (b x).value := by
+  simp only [place, if_neg hx]
+
+/-- General ≤: pointwise-bounded maps have bounded sums. -/
+theorem sum_map_le (f g : Cell → Nat) (l : List Cell)
+    (h : ∀ x ∈ l, f x ≤ g x) :
+    (l.map f).sum ≤ (l.map g).sum := by
+  induction l with
+  | nil => simp
+  | cons a rest ih =>
+    have hrest : (rest.map f).sum ≤ (rest.map g).sum :=
+      ih (fun x hx => h x (List.mem_cons_of_mem _ hx))
+    have hhead : f a ≤ g a := h a (List.mem_cons_self ..)
+    simp only [List.map_cons, List.sum_cons]
+    omega
+
+/-- General strict: pointwise ≤ with one strict member gives a strict sum. -/
+theorem sum_map_lt (f g : Cell → Nat) (l : List Cell)
+    (h : ∀ x ∈ l, f x ≤ g x) (c : Cell) (hc : c ∈ l) (hlt : f c < g c) :
+    (l.map f).sum < (l.map g).sum := by
+  induction l generalizing c with
+  | nil => cases hc
+  | cons a rest ih =>
+    simp only [List.map_cons, List.sum_cons]
+    by_cases ha : a = c
+    · subst ha
+      have hrest : ∀ x ∈ rest, f x ≤ g x :=
+        fun x hx => h x (List.mem_cons_of_mem _ hx)
+      have hsum := sum_map_le f g rest hrest
+      simp only [List.mem_cons, List.map_cons, List.sum_cons] at hc ⊢
+      omega
+    · have hrest : ∀ x ∈ rest, f x ≤ g x :=
+        fun x hx => h x (List.mem_cons_of_mem _ hx)
+      have hmem : c ∈ rest := by
+        rcases List.mem_cons.mp hc with heq | hm
+        · exact absurd heq.symm ha
+        · exact hm
+      have hstrict := ih hrest c hmem hlt
+      have hhead : f a ≤ g a := h a (List.mem_cons_self ..)
+      omega
+
+/-- All 91 board cells in scan order (columns A–K outer, rows inner — our
+approximation of the judge's fill order, which is unpublished). -/
+def cellList : List Cell :=
+  (List.range 11).flatMap fun (i : Nat) =>
+    (List.range 11).filterMap fun (j : Nat) =>
+      let q : Int := (i : Int) + 1
+      let rr : Int := (j : Int) - (i : Int)
+      let c : Cell := { q := q, r := rr }
+      if onBoardB c then some c else none
+
+/-- The total value on the board: the sum of `natAbs` values over all
+cells. Empty cells contribute 0 (well-formed boards). -/
+def totalValue (b : Board) : Nat :=
+  (cellList.map (fun x => (b x).value.natAbs)).sum
+
+/-- The placement's value at `c` is the auto-determined count. -/
+theorem place_value_self (b : Board) (c : Cell) (s : Stack) :
+    (place b c s c).value = s.value := by
+  simp [place]
+
 /-! ## Placement legality and the no-recapture theorem -/
 
 /-- Placement legality, CodeCup variant: on-board, sees at least one
@@ -239,16 +309,6 @@ def fillStepScan (b : Board) (me : Color) (cs : List Cell) : Option Board :=
     if legalPlacementB b me c then
       some (place b c { color := me, value := seen b me c })
     else fillStepScan b me rest
-
-/-- All 91 board cells in scan order (columns A–K outer, rows inner — our
-approximation of the judge's fill order, which is unpublished). -/
-def cellList : List Cell :=
-  (List.range 11).flatMap fun (i : Nat) =>
-    (List.range 11).filterMap fun (j : Nat) =>
-      let q : Int := (i : Int) + 1
-      let rr : Int := (j : Int) - (i : Int)
-      let c : Cell := { q := q, r := rr }
-      if onBoardB c then some c else none
 
 /-- **Scanner soundness**: a returned board is a legal placement on a
 scanned cell. -/
