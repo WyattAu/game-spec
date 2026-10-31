@@ -31,11 +31,15 @@ inductive Color where
   | empty | red | white | neutral
 deriving BEq, DecidableEq, Repr
 
-/-- The opposing colour (irrelevant for empty/neutral; never relied on). -/
+/-- The opposing colour (identity for empty/neutral). An involution on
+ALL colours — relied on by `no_immediate_recapture`. -/
 def other : Color → Color
   | .red => .white
   | .white => .red
   | c => c
+
+theorem other_other (c : Color) : other (other c) = c := by
+  cases c <;> rfl
 
 structure Stack where
   color : Color
@@ -179,6 +183,122 @@ theorem no_immediate_recapture (b : Board) (me : Color) (c : Cell)
       ≤ seen (place b c { color := me, value := seen b me c }) me c := by
   rw [seen_place_self b c _ (other me), seen_place_self b c _ me]
   exact hge
+
+/-- **The full no-recapture corollary**: after a legal placement, the
+opponent has no legal placement on the same cell. -/
+theorem no_immediate_recapture_legal (b : Board) (me : Color) (c : Cell)
+    (hme : me ≠ Color.empty) (h : legalPlacement b me c) :
+    ¬ legalPlacement (place b c { color := me, value := seen b me c })
+        (other me) c := by
+  have hge : seen b me c ≥ seen b (other me) c := by
+    unfold legalPlacement at h
+    exact h.2.2.1
+  have hme' : seen (place b c { color := me, value := seen b me c }) me c =
+      seen b me c := seen_place_self b c _ me
+  have hopp' : seen (place b c { color := me, value := seen b me c }) (other me) c =
+      seen b (other me) c := seen_place_self b c _ (other me)
+  have hopp2 : seen (place b c { color := me, value := seen b me c })
+        (other (other me)) c = seen b (other (other me)) c :=
+    seen_place_self b c _ (other (other me))
+  have hp : place b c { color := me, value := seen b me c } c =
+      { color := me, value := seen b me c } := by
+    simp [place]
+  intro hopp
+  unfold legalPlacement at hopp
+  rw [hopp2] at hopp
+  rw [hp] at hopp
+  obtain ⟨-, h1, h2, h3⟩ := hopp
+  rw [other_other] at h2
+  have hv : ({ color := me, value := seen b me c } : Stack).value = seen b me c :=
+    rfl
+  rw [hv] at h3
+  rcases h3 with h3 | h3
+  · exact absurd h3 hme
+  · omega
+
+/-! ## The fill scanner (sound + complete) -/
+
+/-- Decision form of `legalPlacement` for the row-major scanner. -/
+def legalPlacementB (b : Board) (me : Color) (c : Cell) : Bool :=
+  onBoardB c &&
+    decide (seen b me c ≥ 1 ∧ seen b me c ≥ seen b (other me) c ∧
+      ((b c).color = Color.empty ∨ (b c).value < seen b me c))
+
+/-- Reflection: the Bool gate is exactly the legality proposition. -/
+theorem legalPlacementB_iff (b : Board) (me : Color) (c : Cell) :
+    legalPlacementB b me c = true ↔ legalPlacement b me c := by
+  unfold legalPlacementB legalPlacement
+  simp [onBoardB, onBoard, decide_eq_true_eq]
+
+/-- The row-major scanner: first legal cell in `cs`, applying the
+auto-determined stack. `cs` is `cellList` in practice. -/
+def fillStepScan (b : Board) (me : Color) (cs : List Cell) : Option Board :=
+  match cs with
+  | [] => none
+  | c :: rest =>
+    if legalPlacementB b me c then
+      some (place b c { color := me, value := seen b me c })
+    else fillStepScan b me rest
+
+/-- All 91 board cells in scan order (columns A–K outer, rows inner — our
+approximation of the judge's fill order, which is unpublished). -/
+def cellList : List Cell :=
+  (List.range 11).flatMap fun (i : Nat) =>
+    (List.range 11).filterMap fun (j : Nat) =>
+      let q : Int := (i : Int) + 1
+      let rr : Int := (j : Int) - (i : Int)
+      let c : Cell := { q := q, r := rr }
+      if onBoardB c then some c else none
+
+/-- **Scanner soundness**: a returned board is a legal placement on a
+scanned cell. -/
+theorem fillStepScan_sound (b : Board) (me : Color) (cs : List Cell)
+    (b' : Board) (h : fillStepScan b me cs = some b') :
+    ∃ c ∈ cs, legalPlacement b me c ∧ b' = place b c { color := me, value := seen b me c } := by
+  induction cs with
+  | nil => simp [fillStepScan] at h
+  | cons c rest ih =>
+    simp only [fillStepScan] at h
+    split at h
+    · next hleg =>
+      refine ⟨c, List.mem_cons_self .., (legalPlacementB_iff b me c).mp hleg, ?_⟩
+      injection h with hin
+      exact hin.symm
+    · next hleg =>
+      obtain ⟨x, hxmem, hlegalB, hplace⟩ := ih h
+      exact ⟨x, List.mem_cons_of_mem _ hxmem, hlegalB, hplace⟩
+
+/-- **Scanner completeness**: if the scanner returns none, no scanned cell
+admits a legal placement. -/
+theorem fillStepScan_complete (b : Board) (me : Color) (cs : List Cell)
+    (hnone : fillStepScan b me cs = none) :
+    ∀ c ∈ cs, ¬ legalPlacement b me c := by
+  induction cs with
+  | nil => intro x hx; cases hx
+  | cons c rest ih =>
+    intro x hx hlegal
+    simp only [fillStepScan] at hnone
+    split at hnone
+    · next hleg => exact absurd hnone (by simp)
+    · next hleg =>
+      rcases List.mem_cons.mp hx with heq | hrest
+      · rw [heq] at hlegal
+        exact absurd ((legalPlacementB_iff b me c).mpr hlegal) hleg
+      · exact absurd hlegal (ih hnone x hrest)
+
+/-- One fill step over the full cell list. -/
+def fillStep (b : Board) (me : Color) : Option Board :=
+  fillStepScan b me cellList
+
+/-- Fuel-bounded fill: repeatedly apply the scanner's placement, at most
+`n` times. -/
+def fill (n : Nat) (b : Board) (me : Color) : Board :=
+  match n with
+  | 0 => b
+  | n + 1 =>
+    match fillStep b me with
+    | none => b
+    | some b' => fill n b' me
 
 /-! ## Empty-board sanity -/
 
