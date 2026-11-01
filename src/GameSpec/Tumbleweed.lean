@@ -423,7 +423,7 @@ theorem totalValue_place_gt (b : Board) (me : Color) (c : Cell) (s : Stack)
   unfold legalPlacement at h
   obtain ⟨hon, h1, hge2, hdisj⟩ := h
   have hle : ∀ x ∈ cellList,
-      (b x).value.natAbs ≤ (place b c s x).value.natAbs := by
+      (b x).value.natAbs ≤ (place b c { color := me, value := seen b me c } x).value.natAbs := by
     intro x _
     by_cases hxc : x = c
     · subst hxc
@@ -431,8 +431,9 @@ theorem totalValue_place_gt (b : Board) (me : Color) (c : Cell) (s : Stack)
       rcases hdisj with hdisj | hdisj
       · rw [hzero hdisj]; omega
       · omega
-    · rw [place_value_ne b c s x hxc]
-  have hlt : (b c).value.natAbs < (place b c s c).value.natAbs := by
+    · rw [place_value_ne b c { color := me, value := seen b me c } x hxc]
+      exact Nat.le_refl _
+  have hlt : (b c).value.natAbs < (place b c { color := me, value := seen b me c } c).value.natAbs := by
     rw [place_value_self, hlink]
     rcases hdisj with hdisj | hdisj
     · rw [hzero hdisj]; omega
@@ -442,6 +443,7 @@ theorem totalValue_place_gt (b : Board) (me : Color) (c : Cell) (s : Stack)
 /-- **The fill-step increase**: a scanner placement strictly increases
 the total value. Composes `fillStepScan_sound` with
 `totalValue_place_gt`. -/
+set_option maxRecDepth 8000 in
 theorem fillStep_increase (b : Board) (me : Color)
     (hme : me ≠ Color.empty)
     (hzero : ∀ x, (b x).color = Color.empty → (b x).value = 0)
@@ -455,6 +457,7 @@ theorem fillStep_increase (b : Board) (me : Color)
 /-- **Fill monotonicity**: the fuel-bounded fill never decreases the
 total value. The empty-zero and value-bound invariants are carried
 through every step. -/
+set_option maxRecDepth 8000 in
 theorem fill_mono (b : Board) (me : Color)
     (hme : me ≠ Color.empty)
     (hzero : ∀ x, (b x).color = Color.empty → (b x).value = 0)
