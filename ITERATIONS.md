@@ -199,3 +199,24 @@ values are positive counts) and now pinned in the model.
 **Next**: It 7 — the saturation statement itself (`fillStep (fill 547 b me) me cellList = none`)
 via the counting induction; It 8 — viper safety; It 9 — symmetry; It 10 —
 extraction matrix.
+
+## Session handoff (2026-11-01) — iterations 6-7 WIP
+
+Iterations 1-5 GREEN on main (765d456). Iteration 6 (termination chain) is
+written but not yet compile-green: the tactic-level fixes outstanding are
+mechanical (documented in the session stash `iteration-6 tactic-level WIP`):
+
+1. ≤-branch x = c: `rcases hdisj` BEFORE `rw [hzero hdisj]` (the disjunction
+   must be split before `hzero` consumes it), then per-branch `omega`.
+2. x ≠ c branch: after `rw [place_value_ne …]`, close with `exact Nat.le_refl _`.
+3. `set_option maxRecDepth 8000 in` goes BEFORE the doc comment of
+   `fillStep_increase` / `fill_mono` (a doc comment cannot precede `set_option … in`).
+4. `fill_mono` needs `(hpos : ∀ x, 0 ≤ (b x).value)` threaded for
+   `totalValue_place_gt`'s target-value non-negativity.
+5. Two whnf-timeouts: `simp [place]`-heavy proofs need heartbeats raised or
+   the `simp`-only chains shortened.
+
+After green: merge wip/iteration-6 → main, then It 7 fill saturation
+(counting: totalValue increases ≥ 1 per placement, bounded by 546 ⇒
+≤ 546 placements ⇒ scanner none), It 8-9 viper safety, It 10 symmetry +
+extraction matrix.
