@@ -440,10 +440,11 @@ theorem totalValue_place_gt (b : Board) (me : Color) (c : Cell) (s : Stack)
     · omega
   exact sum_map_lt _ _ cellList hle c hc hlt
 
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 1000000 in
 /-- **The fill-step increase**: a scanner placement strictly increases
 the total value. Composes `fillStepScan_sound` with
 `totalValue_place_gt`. -/
-set_option maxRecDepth 8000 in
 theorem fillStep_increase (b : Board) (me : Color)
     (hme : me ≠ Color.empty)
     (hzero : ∀ x, (b x).color = Color.empty → (b x).value = 0)
@@ -452,12 +453,16 @@ theorem fillStep_increase (b : Board) (me : Color)
     totalValue b < totalValue b' := by
   obtain ⟨c, hcmem, hlegal, hplace⟩ := fillStepScan_sound b me cellList b' h
   refine totalValue_place_gt b me c { color := me, value := seen b me c } hme
-    (fun hc => hzero c hc) (fun x => Nat.le_of_lt (hpos' x)) hlegal rfl hcmem
+    (fun hc => hzero c hc)
+    (by
+      simp only [place, hplace]
+      exact Int.natCast_nonneg _) hlegal rfl hcmem
 
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 2000000 in
 /-- **Fill monotonicity**: the fuel-bounded fill never decreases the
 total value. The empty-zero and value-bound invariants are carried
 through every step. -/
-set_option maxRecDepth 8000 in
 theorem fill_mono (b : Board) (me : Color)
     (hme : me ≠ Color.empty)
     (hzero : ∀ x, (b x).color = Color.empty → (b x).value = 0)
