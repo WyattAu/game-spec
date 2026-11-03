@@ -236,3 +236,22 @@ green, all documented in the session notes.
 
 Iterations 1-5 remain GREEN on main (765d456). 6/10 attempted, 5/10
 green, 1 WIP. It 7-10 scoped and unchanged.
+
+## Session addendum 2 (2026-11-02) — the fill_mono defeq blocker
+
+The ≤-branch fix landed (Nat.le_refl ✓) and fillStep_increase's hpos
+landed (simp [hplace] ✓). The remaining blocker is `fill_mono`'s hinv
+induction: the succ-branch's `place_zero_ok`/`place_bound_ok`
+applications require the elaborator to check
+`((fill n b me) x)` defeq `((match fillStep b me with …) x)` — which
+unfolds `cellList`'s flatMap/filterMap/decide chain and exhausts 4M
+heartbeats.
+
+**Fix for the next session**: restructure the invariant to quantify
+over the final board (the bounded-reachability pattern):
+
+    have hinv : ∀ (n : Nat) (b' : Board), b' = fill n b me → (invariants about b') ∧ totalValue b ≤ totalValue b'
+
+then the succ-step's transfer lemmas (`place_zero_ok` etc.) apply
+directly to `b'` with no defeq-check needed. This is the standard
+bounded-reachability induction pattern.

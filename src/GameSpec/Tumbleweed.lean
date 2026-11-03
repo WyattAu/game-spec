@@ -459,7 +459,7 @@ theorem fillStep_increase (b : Board) (me : Color)
       exact Int.natCast_nonneg _) hlegal rfl hcmem
 
 set_option maxRecDepth 8000 in
-set_option maxHeartbeats 2000000 in
+set_option maxHeartbeats 4000000 in
 /-- **Fill monotonicity**: the fuel-bounded fill never decreases the
 total value. The empty-zero and value-bound invariants are carried
 through every step. -/
@@ -484,16 +484,23 @@ theorem fill_mono (b : Board) (me : Color)
       · next hb' =>
         obtain ⟨c, hcmem, hlegal, hplace⟩ :=
           fillStepScan_sound (fill n b me) me cellList b' hb'
-        have hz' : ∀ x, (b' x).color = Color.empty → (b' x).value = 0 :=
+        -- bind the placed board: the defeq between (match …) x and (b'' x)
+        -- is one-step, avoiding the deep cellList-unfold
+        have hb'' : Board := b'
+        have hz'' : ∀ x, (b'' x).color = Color.empty → (b'' x).value = 0 :=
           place_zero_ok (fill n b me) c
             { color := me, value := seen (fill n b me) c } hme hz
-        have hb'2 : ∀ x, (b' x).value.natAbs ≤ 6 :=
+        have hp'' : ∀ x, 0 ≤ (b'' x).value :=
+          place_pos_ok (fill n b me) c
+            { color := me, value := seen (fill n b me) c }
+            (Nat.le_of_lt (seen_le_six (fill n b me) me c)) hpos
+        have hb'2 : ∀ x, (b'' x).value.natAbs ≤ 6 :=
           place_bound_ok (fill n b me) c
             { color := me, value := seen (fill n b me) c }
             (seen_le_six (fill n b me) me c) hb
         have hinc := totalValue_place_gt (fill n b me) me c
-          { color := me, value := seen (fill n b me) c } hme hz' hlegal rfl hcmem
-        exact ⟨hz', hb'2, Nat.le_trans hle (Nat.le_of_lt hinc)⟩
+          { color := me, value := seen (fill n b me) c } hme hz'' hp'' hlegal rfl hcmem
+        exact ⟨hz'', hp'', hb'2, Nat.le_trans hle (Nat.le_of_lt hinc)⟩
   exact (hinv n).2.2
 
 /-! ## Empty-board sanity -/
