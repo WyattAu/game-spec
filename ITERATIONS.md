@@ -220,3 +220,19 @@ After green: merge wip/iteration-6 → main, then It 7 fill saturation
 (counting: totalValue increases ≥ 1 per placement, bounded by 546 ⇒
 ≤ 546 placements ⇒ scanner none), It 8-9 viper safety, It 10 symmetry +
 extraction matrix.
+
+## Session addendum (2026-11-02)
+
+Iteration 6's termination chain is written and committed on
+`wip/iteration-6` (commit 7ee4ee9). The remaining blocker is one
+tactic-level defeq-performance issue in `fill_mono`'s succ-branch: the
+`place_zero_ok`/`place_bound_ok` applications against the match-term
+goal trip the elaborator's defeq-check through the `cellList` unfold
+(heartbeats/recursion exhausted at 2M). The fix is interactive:
+bind the placed board to a local (`have hb : Board := b'`-style) or
+restructure the succ-branch's applications to avoid the deep
+`cellList`-unfold during unification. Four tactic-level fixes from
+green, all documented in the session notes.
+
+Iterations 1-5 remain GREEN on main (765d456). 6/10 attempted, 5/10
+green, 1 WIP. It 7-10 scoped and unchanged.
