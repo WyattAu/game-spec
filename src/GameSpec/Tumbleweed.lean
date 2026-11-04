@@ -463,45 +463,57 @@ set_option maxHeartbeats 4000000 in
 /-- **Fill monotonicity**: the fuel-bounded fill never decreases the
 total value. The empty-zero and value-bound invariants are carried
 through every step. -/
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 1000000 in
+/-- **Fill monotonicity and invariant preservation**: after `n` fill steps
+from a well-formed board, the board is still well-formed and the total
+value never decreased. This is the bounded-reachability induction: the
+invariants and the ≤ transfer through every placement step. -/
 theorem fill_mono (b : Board) (me : Color)
     (hme : me ≠ Color.empty)
     (hzero : ∀ x, (b x).color = Color.empty → (b x).value = 0)
+    (hpos : ∀ x, 0 ≤ (b x).value)
     (hbound : ∀ x, (b x).value.natAbs ≤ 6) :
-    ∀ (n : Nat), totalValue b ≤ totalValue (fill n b me) := by
-  have hinv : ∀ (n : Nat),
-      (∀ x, ((fill n b me) x).color = Color.empty →
-        ((fill n b me) x).value = 0) ∧
-      (∀ x, ((fill n b me) x).value.natAbs ≤ 6) ∧
-      totalValue b ≤ totalValue (fill n b me) := by
-    intro n
-    induction n with
-    | zero => exact ⟨hzero, hbound, Nat.le_refl _⟩
-    | succ n ih =>
-      obtain ⟨hz, hb, hle⟩ := ih
-      rw [fill]
-      split
-      · exact ⟨hz, hb, hle⟩
-      · next hb' =>
-        obtain ⟨c, hcmem, hlegal, hplace⟩ :=
-          fillStepScan_sound (fill n b me) me cellList b' hb'
-        -- bind the placed board: the defeq between (match …) x and (b'' x)
-        -- is one-step, avoiding the deep cellList-unfold
-        have hb'' : Board := b'
-        have hz'' : ∀ x, (b'' x).color = Color.empty → (b'' x).value = 0 :=
-          place_zero_ok (fill n b me) c
-            { color := me, value := seen (fill n b me) c } hme hz
-        have hp'' : ∀ x, 0 ≤ (b'' x).value :=
-          place_pos_ok (fill n b me) c
-            { color := me, value := seen (fill n b me) c }
-            (Nat.le_of_lt (seen_le_six (fill n b me) me c)) hpos
-        have hb'2 : ∀ x, (b'' x).value.natAbs ≤ 6 :=
-          place_bound_ok (fill n b me) c
-            { color := me, value := seen (fill n b me) c }
-            (seen_le_six (fill n b me) me c) hb
-        have hinc := totalValue_place_gt (fill n b me) me c
-          { color := me, value := seen (fill n b me) c } hme hz'' hp'' hlegal rfl hcmem
-        exact ⟨hz'', hp'', hb'2, Nat.le_trans hle (Nat.le_of_lt hinc)⟩
-  exact (hinv n).2.2
+    ∀ (n : Nat) (b' : Board), b' = fill n b me →
+      (∀ x, (b' x).color = Color.empty → (b' x).value = 0) ∧
+      (∀ x, 0 ≤ (b' x).value) ∧
+      (∀ x, (b' x).value.natAbs ≤ 6) ∧
+      totalValue b ≤ totalValue b' := by
+  intro n
+  induction n generalizing b' with
+  | zero =>
+    intro b' hb'
+    rw [fill] at hb'
+    subst hb'
+    exact ⟨hzero, hpos, hbound, Nat.le_refl _⟩
+  | succ n ih =>
+    intro b' hb'
+    rw [fill] at hb'
+    split at hb'
+    · -- none: fill (n+1) = fill n b me — the invariants and the ≤ transfer from ih
+      obtain ⟨hz, hp, hbound, hle⟩ := ih b' rfl
+      subst hb'
+      exact ⟨hz, hp, hbound, Nat.le_trans hle (Nat.le_refl _)⟩
+    · next hb' =>
+      -- some b'': the placement on fill n b me — the invariants via the
+      -- place_* preservation lemmas, the ≤ via the increase
+      obtain ⟨c, hcmem, hlegal, hplace⟩ :=
+        fillStepScan_sound (fill n b me) me cellList b'' hb'
+      have hz' : ∀ x, (b'' x).color = Color.empty → (b'' x).value = 0 :=
+        place_zero_ok (fill n b me) c
+          { color := me, value := seen (fill n b me) c } hme hz
+      have hp' : ∀ x, 0 ≤ (b'' x).value :=
+        place_pos_ok (fill n b me) c
+          { color := me, value := seen (fill n b me) c }
+          (Nat.le_of_lt (seen_le_six (fill n b me) me c)) hpos
+      have hb'2 : ∀ x, (b'' x).value.natAbs ≤ 6 :=
+        place_bound_ok (fill n b me) c
+          { color := me, value := seen (fill n b me) c }
+          (seen_le_six (fill n b me) me c) hbound
+      have hinc := totalValue_place_gt (fill n b me) me c
+        { color := me, value := seen (fill n b me) c } hme hz' hp' hlegal rfl hcmem
+      subst hb'
+      exact ⟨hz', hp', hb'2, Nat.le_trans hle (Nat.le_of_lt hinc)⟩
 
 /-! ## Empty-board sanity -/
 
