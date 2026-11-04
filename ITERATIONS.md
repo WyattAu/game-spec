@@ -199,3 +199,59 @@ values are positive counts) and now pinned in the model.
 **Next**: It 7 — the saturation statement itself (`fillStep (fill 547 b me) me cellList = none`)
 via the counting induction; It 8 — viper safety; It 9 — symmetry; It 10 —
 extraction matrix.
+
+## Session handoff (2026-11-01) — iterations 6-7 WIP
+
+Iterations 1-5 GREEN on main (765d456). Iteration 6 (termination chain) is
+written but not yet compile-green: the tactic-level fixes outstanding are
+mechanical (documented in the session stash `iteration-6 tactic-level WIP`):
+
+1. ≤-branch x = c: `rcases hdisj` BEFORE `rw [hzero hdisj]` (the disjunction
+   must be split before `hzero` consumes it), then per-branch `omega`.
+2. x ≠ c branch: after `rw [place_value_ne …]`, close with `exact Nat.le_refl _`.
+3. `set_option maxRecDepth 8000 in` goes BEFORE the doc comment of
+   `fillStep_increase` / `fill_mono` (a doc comment cannot precede `set_option … in`).
+4. `fill_mono` needs `(hpos : ∀ x, 0 ≤ (b x).value)` threaded for
+   `totalValue_place_gt`'s target-value non-negativity.
+5. Two whnf-timeouts: `simp [place]`-heavy proofs need heartbeats raised or
+   the `simp`-only chains shortened.
+
+After green: merge wip/iteration-6 → main, then It 7 fill saturation
+(counting: totalValue increases ≥ 1 per placement, bounded by 546 ⇒
+≤ 546 placements ⇒ scanner none), It 8-9 viper safety, It 10 symmetry +
+extraction matrix.
+
+## Session addendum (2026-11-02)
+
+Iteration 6's termination chain is written and committed on
+`wip/iteration-6` (commit 7ee4ee9). The remaining blocker is one
+tactic-level defeq-performance issue in `fill_mono`'s succ-branch: the
+`place_zero_ok`/`place_bound_ok` applications against the match-term
+goal trip the elaborator's defeq-check through the `cellList` unfold
+(heartbeats/recursion exhausted at 2M). The fix is interactive:
+bind the placed board to a local (`have hb : Board := b'`-style) or
+restructure the succ-branch's applications to avoid the deep
+`cellList`-unfold during unification. Four tactic-level fixes from
+green, all documented in the session notes.
+
+Iterations 1-5 remain GREEN on main (765d456). 6/10 attempted, 5/10
+green, 1 WIP. It 7-10 scoped and unchanged.
+
+## Session addendum 2 (2026-11-02) — the fill_mono defeq blocker
+
+The ≤-branch fix landed (Nat.le_refl ✓) and fillStep_increase's hpos
+landed (simp [hplace] ✓). The remaining blocker is `fill_mono`'s hinv
+induction: the succ-branch's `place_zero_ok`/`place_bound_ok`
+applications require the elaborator to check
+`((fill n b me) x)` defeq `((match fillStep b me with …) x)` — which
+unfolds `cellList`'s flatMap/filterMap/decide chain and exhausts 4M
+heartbeats.
+
+**Fix for the next session**: restructure the invariant to quantify
+over the final board (the bounded-reachability pattern):
+
+    have hinv : ∀ (n : Nat) (b' : Board), b' = fill n b me → (invariants about b') ∧ totalValue b ≤ totalValue b'
+
+then the succ-step's transfer lemmas (`place_zero_ok` etc.) apply
+directly to `b'` with no defeq-check needed. This is the standard
+bounded-reachability induction pattern.

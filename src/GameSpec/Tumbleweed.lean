@@ -225,10 +225,54 @@ cells. Empty cells contribute 0 (well-formed boards). -/
 def totalValue (b : Board) : Nat :=
   (cellList.map (fun x => (b x).value.natAbs)).sum
 
+/-- Core-only: a constant map's sum is the constant times the length. -/
+theorem sum_map_const (k : Nat) (l : List Cell) :
+    (l.map (fun _ => k)).sum = k * l.length := by
+  induction l with
+  | nil => simp
+  | cons a rest ih => simp [ih, Nat.mul_add, Nat.add_comm]
+
+/-- The total value of any board whose stacks are all worth ≤ 6 is at
+most 6 × (number of cells) = 546. -/
+theorem totalValue_le_bound (b : Board)
+    (hb : ∀ x ∈ cellList, (b x).value.natAbs ≤ 6) :
+    totalValue b ≤ 6 * cellList.length := by
+  unfold totalValue
+  have h := sum_map_le (fun x => (b x).value.natAbs) (fun _ => 6) cellList hb
+  rw [sum_map_const] at h
+  exact h
+
 /-- The placement's value at `c` is the auto-determined count. -/
 theorem place_value_self (b : Board) (c : Cell) (s : Stack) :
     (place b c s c).value = s.value := by
   simp [place]
+
+/-- A placement preserves the empty-cells-carry-zero invariant away from
+the placed stack, which is non-empty by construction. -/
+theorem place_zero_ok (b : Board) (c : Cell) (s : Stack)
+    (hs : s.color ≠ Color.empty)
+    (hz : ∀ x, (b x).color = Color.empty → (b x).value = 0) :
+    ∀ x, (place b c s x).color = Color.empty → (place b c s x).value = 0 := by
+  intro x hx
+  simp only [place] at hx ⊢
+  revert hx
+  split
+  · intro hx; exact absurd hx hs
+  · intro hx; exact hz x hx
+
+/-- A placement preserves the value bound: the placed stack's value is
+the auto-determined sightline count, ≤ 6. -/
+theorem place_bound_ok (b : Board) (c : Cell) (s : Stack)
+    (hs : s.value.natAbs ≤ 6)
+    (hb : ∀ x, (b x).value.natAbs ≤ 6) :
+    ∀ x, (place b c s x).value.natAbs ≤ 6 := by
+  intro x
+  simp only [place]
+  by_cases hxc : x = c
+  · rw [if_pos hxc]
+    exact hs
+  · rw [if_neg hxc]
+    exact hb x
 
 /-! ## Placement legality and the no-recapture theorem -/
 
@@ -359,6 +403,105 @@ def fill (n : Nat) (b : Board) (me : Color) : Board :=
     match fillStep b me with
     | none => b
     | some b' => fill n b' me
+
+/-- **The increase theorem**: a legal placement strictly increases the
+total value. This is the fill-termination measure: the total is bounded
+(≤ 6 per cell × 91 cells) yet every fill placement adds ≥ 1, so
+fuel-bounded fill saturates in ≤ 546 steps. Requires the target cell to
+be a well-formed member of the scan list and the empty-cells-carry-zero
+property at the target. -/
+theorem totalValue_place_gt (b : Board) (me : Color) (c : Cell) (s : Stack)
+    (hme : me ≠ Color.empty)
+    (hzero : (b c).color = Color.empty → (b c).value = 0)
+    (hpos : 0 ≤ (b c).value)
+    (h : legalPlacement b me c) (hs : s = { color := me, value := seen b me c })
+    (hc : c ∈ cellList) :
+    totalValue (place b c s) > totalValue b := by
+  subst hs
+  have hlink : ({ color := me, value := seen b me c } : Stack).value =
+      seen b me c := rfl
+  unfold legalPlacement at h
+  obtain ⟨hon, h1, hge2, hdisj⟩ := h
+  have hle : ∀ x ∈ cellList,
+      (b x).value.natAbs ≤ (place b c { color := me, value := seen b me c } x).value.natAbs := by
+    intro x _
+    by_cases hxc : x = c
+    · subst hxc
+      rw [place_value_self, hlink]
+      rcases hdisj with hdisj | hdisj
+      · rw [hzero hdisj]; omega
+      · omega
+    · rw [place_value_ne b c { color := me, value := seen b me c } x hxc]
+      exact Nat.le_refl _
+  have hlt : (b c).value.natAbs < (place b c { color := me, value := seen b me c } c).value.natAbs := by
+    rw [place_value_self, hlink]
+    rcases hdisj with hdisj | hdisj
+    · rw [hzero hdisj]; omega
+    · omega
+  exact sum_map_lt _ _ cellList hle c hc hlt
+
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 1000000 in
+/-- **The fill-step increase**: a scanner placement strictly increases
+the total value. Composes `fillStepScan_sound` with
+`totalValue_place_gt`. -/
+theorem fillStep_increase (b : Board) (me : Color)
+    (hme : me ≠ Color.empty)
+    (hzero : ∀ x, (b x).color = Color.empty → (b x).value = 0)
+    (hbound : ∀ x, (b x).value.natAbs ≤ 6)
+    (b' : Board) (h : fillStep b me = some b') :
+    totalValue b < totalValue b' := by
+  obtain ⟨c, hcmem, hlegal, hplace⟩ := fillStepScan_sound b me cellList b' h
+  refine totalValue_place_gt b me c { color := me, value := seen b me c } hme
+    (fun hc => hzero c hc)
+    (by
+      simp only [place, hplace]
+      exact Int.natCast_nonneg _) hlegal rfl hcmem
+
+set_option maxRecDepth 8000 in
+set_option maxHeartbeats 4000000 in
+/-- **Fill monotonicity**: the fuel-bounded fill never decreases the
+total value. The empty-zero and value-bound invariants are carried
+through every step. -/
+theorem fill_mono (b : Board) (me : Color)
+    (hme : me ≠ Color.empty)
+    (hzero : ∀ x, (b x).color = Color.empty → (b x).value = 0)
+    (hbound : ∀ x, (b x).value.natAbs ≤ 6) :
+    ∀ (n : Nat), totalValue b ≤ totalValue (fill n b me) := by
+  have hinv : ∀ (n : Nat),
+      (∀ x, ((fill n b me) x).color = Color.empty →
+        ((fill n b me) x).value = 0) ∧
+      (∀ x, ((fill n b me) x).value.natAbs ≤ 6) ∧
+      totalValue b ≤ totalValue (fill n b me) := by
+    intro n
+    induction n with
+    | zero => exact ⟨hzero, hbound, Nat.le_refl _⟩
+    | succ n ih =>
+      obtain ⟨hz, hb, hle⟩ := ih
+      rw [fill]
+      split
+      · exact ⟨hz, hb, hle⟩
+      · next hb' =>
+        obtain ⟨c, hcmem, hlegal, hplace⟩ :=
+          fillStepScan_sound (fill n b me) me cellList b' hb'
+        -- bind the placed board: the defeq between (match …) x and (b'' x)
+        -- is one-step, avoiding the deep cellList-unfold
+        have hb'' : Board := b'
+        have hz'' : ∀ x, (b'' x).color = Color.empty → (b'' x).value = 0 :=
+          place_zero_ok (fill n b me) c
+            { color := me, value := seen (fill n b me) c } hme hz
+        have hp'' : ∀ x, 0 ≤ (b'' x).value :=
+          place_pos_ok (fill n b me) c
+            { color := me, value := seen (fill n b me) c }
+            (Nat.le_of_lt (seen_le_six (fill n b me) me c)) hpos
+        have hb'2 : ∀ x, (b'' x).value.natAbs ≤ 6 :=
+          place_bound_ok (fill n b me) c
+            { color := me, value := seen (fill n b me) c }
+            (seen_le_six (fill n b me) me c) hb
+        have hinc := totalValue_place_gt (fill n b me) me c
+          { color := me, value := seen (fill n b me) c } hme hz'' hp'' hlegal rfl hcmem
+        exact ⟨hz'', hp'', hb'2, Nat.le_trans hle (Nat.le_of_lt hinc)⟩
+  exact (hinv n).2.2
 
 /-! ## Empty-board sanity -/
 
