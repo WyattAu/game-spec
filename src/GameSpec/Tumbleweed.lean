@@ -478,7 +478,7 @@ theorem fill_mono (b : Board) (me : Color)
     | zero => exact ⟨hzero, hbound, Nat.le_refl _⟩
     | succ n ih =>
       obtain ⟨hz, hb, hle⟩ := ih
-      simp only [fill]
+      rw [fill]
       split
       · exact ⟨hz, hb, hle⟩
       · next hb' =>
