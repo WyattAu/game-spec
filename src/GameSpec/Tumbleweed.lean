@@ -441,7 +441,7 @@ theorem totalValue_place_gt (b : Board) (me : Color) (c : Cell) (s : Stack)
   exact sum_map_lt _ _ cellList hle c hc hlt
 
 set_option maxRecDepth 8000 in
-set_option maxHeartbeats 1000000 in
+set_option maxHeartbeats 4000000 in
 /-- **The fill-step increase**: a scanner placement strictly increases
 the total value. Composes `fillStepScan_sound` with
 `totalValue_place_gt`. -/
@@ -454,17 +454,11 @@ theorem fillStep_increase (b : Board) (me : Color)
   obtain ⟨c, hcmem, hlegal, hplace⟩ := fillStepScan_sound b me cellList b' h
   refine totalValue_place_gt b me c { color := me, value := seen b me c } hme
     (fun hc => hzero c hc)
-    (by
-      simp only [place, hplace]
-      exact Int.natCast_nonneg _) hlegal rfl hcmem
+    (by simp only [place, hplace]; exact Int.natCast_nonneg _)
+    hlegal rfl hcmem
 
 set_option maxRecDepth 8000 in
-set_option maxHeartbeats 4000000 in
-/-- **Fill monotonicity**: the fuel-bounded fill never decreases the
-total value. The empty-zero and value-bound invariants are carried
-through every step. -/
-set_option maxRecDepth 8000 in
-set_option maxHeartbeats 1000000 in
+set_option maxHeartbeats 2000000 in
 /-- **Fill monotonicity and invariant preservation**: after `n` fill steps
 from a well-formed board, the board is still well-formed and the total
 value never decreased. This is the bounded-reachability induction: the
@@ -479,10 +473,12 @@ theorem fill_mono (b : Board) (me : Color)
       (∀ x, 0 ≤ (b' x).value) ∧
       (∀ x, (b' x).value.natAbs ≤ 6) ∧
       totalValue b ≤ totalValue b' := by
-  intro n
+  intro n b'
   induction n generalizing b' with
   | zero =>
-    intro b' hb'
+    rw [fill] at hb'
+    subst hb'
+    exact ⟨hzero, hpos, hbound, Nat.le_refl _⟩
     rw [fill] at hb'
     subst hb'
     exact ⟨hzero, hpos, hbound, Nat.le_refl _⟩
