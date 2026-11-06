@@ -541,6 +541,114 @@ theorem fill_mono (me : Color) (hme : me ≠ Color.empty) (n : Nat) :
         (place b c { color := me, value := seen b me c }) hstep
       exact ⟨iz, ip, ib, Nat.le_trans (Nat.le_of_lt hinc) imono⟩
 
+/-! ## Fill saturation (iteration 7) -/
+
+/-- Stickiness: once a fill step finds no legal placement, every larger
+fuel returns the same board. -/
+theorem fill_const_of_none (n : Nat) (b : Board) (me : Color)
+    (h : fillStep b me = none) : fill n b me = b := by
+  induction n with
+  | zero => rfl
+  | succ k => rw [fill, h]
+
+/-- Scanner-step invariant preservation: if `b` is well-formed and the
+scanner places, the placed board is well-formed. -/
+theorem fillStep_ok (b : Board) (me : Color)
+    (hme : me ≠ Color.empty)
+    (hzero : ∀ x, (b x).color = Color.empty → (b x).value = 0)
+    (hpos : ∀ x, 0 ≤ (b x).value)
+    (hbound : ∀ x, (b x).value.natAbs ≤ 6)
+    (b'' : Board) (hstep : fillStep b me = some b'') :
+    (∀ x, (b'' x).color = Color.empty → (b'' x).value = 0) ∧
+    (∀ x, 0 ≤ (b'' x).value) ∧
+    (∀ x, (b'' x).value.natAbs ≤ 6) := by
+  obtain ⟨c, hcmem, hlegal, hplace⟩ := fillStepScan_sound b me cellList b'' hstep
+  subst hplace
+  refine ⟨place_zero_ok b c { color := me, value := seen b me c } hme hzero, ?_, ?_⟩
+  · intro x
+    simp only [place]
+    by_cases hxc : x = c
+    · rw [if_pos hxc]
+      exact Int.natCast_nonneg _
+    · rw [if_neg hxc]
+      exact hpos x
+  · have hsb : ({ color := me, value := seen b me c } : Stack).value.natAbs ≤ 6 := by
+      have h6 := seen_le_six b me c
+      show (seen b me c : Int).natAbs ≤ 6
+      omega
+    exact place_bound_ok b c { color := me, value := seen b me c } hsb hbound
+
+/-- **The saturation count**: from a well-formed board the fill
+stabilizes once the fuel exceeds the headroom — every effective step
+strictly increases the total, and the total cannot exceed 546, so after
+`546 - totalValue b` steps no placement can remain. This is why the
+judge's fill loop terminates in at most 547 iterations. -/
+theorem fill_stable_of_big (me : Color) (hme : me ≠ Color.empty) :
+    ∀ (n : Nat) (b : Board),
+      (∀ x, (b x).color = Color.empty → (b x).value = 0) →
+      (∀ x, 0 ≤ (b x).value) →
+      (∀ x, (b x).value.natAbs ≤ 6) →
+      totalValue b + n > 546 → fill (n + 1) b me = fill n b me := by
+  intro n
+  induction n with
+  | zero =>
+    intro b hzero hpos hbound hgt
+    have hcap : totalValue b ≤ 546 := by
+      have h := totalValue_le_bound b (fun x _ => hbound x)
+      have h91 : cellList.length = 91 := by decide
+      rw [h91] at h
+      omega
+    exact absurd hgt (by omega)
+  | succ n ih =>
+    intro b hzero hpos hbound hgt
+    cases hstep : fillStep b me with
+    | none => rw [fill, fill, hstep]
+    | some b'' =>
+      rw [fill, fill, hstep]
+      show fill (n + 1) b'' me = fill n b'' me
+      obtain ⟨hz'', hp'', hb''⟩ := fillStep_ok b me hme hzero hpos hbound b'' hstep
+      exact ih b'' hz'' hp'' hb'' (by
+        have hinc := fillStep_increase b me hme hzero hpos b'' hstep
+        omega)
+
+/-- **No placement at the cap**: a well-formed board already at the
+maximum total admits no legal placement — the judge's fill stops here. -/
+theorem fillStep_none_of_cap (b : Board) (me : Color)
+    (hme : me ≠ Color.empty)
+    (hzero : ∀ x, (b x).color = Color.empty → (b x).value = 0)
+    (hpos : ∀ x, 0 ≤ (b x).value)
+    (hbound : ∀ x, (b x).value.natAbs ≤ 6)
+    (hcap : totalValue b = 546) :
+    fillStep b me = none := by
+  have h91 : cellList.length = 91 := by decide
+  cases hstep : fillStep b me with
+  | none => rfl
+  | some b'' =>
+    obtain ⟨c, hcmem, hlegal, hplace⟩ := fillStepScan_sound b me cellList b'' hstep
+    subst hplace
+    have hz'' := place_zero_ok b c { color := me, value := seen b me c } hme hzero
+    have hp'' : ∀ x, 0 ≤ (place b c { color := me, value := seen b me c } x).value := by
+      intro x
+      simp only [place]
+      by_cases hxc : x = c
+      · rw [if_pos hxc]
+        exact Int.natCast_nonneg _
+      · rw [if_neg hxc]
+        exact hpos x
+    have hsb : ({ color := me, value := seen b me c } : Stack).value.natAbs ≤ 6 := by
+      have h6 := seen_le_six b me c
+      show (seen b me c : Int).natAbs ≤ 6
+      omega
+    have hb'' := place_bound_ok b c { color := me, value := seen b me c } hsb hbound
+    have hcap'' : totalValue (place b c { color := me, value := seen b me c }) ≤ 546 := by
+      have h := totalValue_le_bound (place b c { color := me, value := seen b me c })
+        (fun x _ => hb'' x)
+      rw [h91] at h
+      omega
+    have hinc := fillStep_increase b me hme hzero hpos
+      (place b c { color := me, value := seen b me c }) hstep
+    exact absurd hinc (by omega)
+
 /-! ## Empty-board sanity -/
 
 theorem firstHit_emptyBoard (d : Dir) (c : Cell) :
@@ -579,5 +687,39 @@ theorem seen_emptyBoard (color : Color) (hne : color ≠ Color.empty) (c : Cell)
       simp only [List.map_cons, List.sum_cons, hz]
       rw [ih]
   exact hmap Dir.all
+
+/-! ## Fill fixpoint (iteration 7 corollaries) -/
+
+/-- Forward scanner criterion: if no scanned cell admits a legal
+placement, the scanner returns none. -/
+theorem fillStepScan_none_of_forall (b : Board) (me : Color) (cs : List Cell)
+    (hall : ∀ c ∈ cs, ¬ legalPlacement b me c) : fillStepScan b me cs = none := by
+  induction cs with
+  | nil => rfl
+  | cons c rest ih =>
+    simp only [fillStepScan]
+    split
+    · next hleg =>
+      exact absurd ((legalPlacementB_iff b me c).mp hleg)
+        (hall c (List.mem_cons_self ..))
+    · next =>
+      exact ih (fun x hx => hall x (List.mem_cons_of_mem _ hx))
+
+/-- The empty board is THE fill fixpoint: no legal placement anywhere. -/
+theorem fillStep_none_emptyBoard (me : Color) (hme : me ≠ Color.empty) :
+    fillStep emptyBoard me = none := by
+  unfold fillStep
+  apply fillStepScan_none_of_forall
+  intro c _ hleg
+  unfold legalPlacement at hleg
+  obtain ⟨hon, h1, hge2, hdisj⟩ := hleg
+  rw [seen_emptyBoard me hme c] at h1
+  omega
+
+/-- Headline corollary: from the empty board the fill is the identity at
+every fuel — the judge's fill terminates immediately at game start. -/
+theorem fill_547_empty (me : Color) (hme : me ≠ Color.empty) :
+    fill 547 emptyBoard me = emptyBoard :=
+  fill_const_of_none 547 emptyBoard me (fillStep_none_emptyBoard me hme)
 
 end Tw
