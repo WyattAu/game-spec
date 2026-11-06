@@ -57,6 +57,37 @@ def emptyBoard : Board := fun _ => emptyStack
 def place (b : Board) (c : Cell) (s : Stack) : Board :=
   fun x => if x = c then s else b x
 
+/-! ## Colour symmetry (Iteration 9) -/
+
+/-- Colour-swap involution on boards: red ↔ white, empty/neutral fixed.
+Stack values are preserved — the auto-determined value is a sightline
+count, which the symmetry theorems below show is itself
+colour-symmetric. -/
+def swapBoard (b : Board) : Board :=
+  fun x => { (b x) with color := other (b x).color }
+
+theorem swapBoard_value (b : Board) (x : Cell) :
+    (swapBoard b x).value = (b x).value := rfl
+
+theorem swapBoard_swap (b : Board) : swapBoard (swapBoard b) = b := by
+  funext x
+  cases hx : b x with
+  | mk col val => simp [swapBoard, hx, other_other]
+
+theorem other_ne_empty (k : Color) (h : k ≠ Color.empty) :
+    other k ≠ Color.empty := by
+  cases k with
+  | empty => exact absurd rfl h
+  | red => simp [other]
+  | white => simp [other]
+  | neutral => simp [other]
+
+theorem other_inj {x y : Color} (h : other x = other y) : x = y := by
+  rw [← other_other x, ← other_other y, h]
+
+theorem other_eq_empty (k : Color) : other k = Color.empty ↔ k = Color.empty := by
+  cases k <;> simp [other]
+
 /-! ## Sightlines -/
 
 /-- One fold step of a sightline ray: keep the first hit, or look at the
@@ -159,6 +190,78 @@ theorem seen_place_self (b : Board) (c : Cell) (s : Stack) (color : Color) :
   split
   · next h => exact absurd h hx
   · rfl
+
+/-! ### The swap commutes with the sightline walk (Iteration 9) -/
+
+/-- The ray step on a colour-swapped board tracks `Option.map other` of
+the step on the original board. -/
+theorem rayStep_swap (b : Board) (cell : Cell) (st : Option Color) :
+    rayStep (swapBoard b) cell (st.map other) = (rayStep b cell st).map other := by
+  cases hst : st with
+  | none =>
+    simp only [hst, Option.map_none]
+    simp only [rayStep, swapBoard]
+    by_cases hE : (b cell).color = Color.empty
+    · simp [hE, other]
+    · have hone : other (b cell).color ≠ Color.empty := other_ne_empty _ hE
+      simp [hE, hone]
+  | some k => rfl
+
+theorem option_map_other_getD (st : Option Color) :
+    (st.map other).getD Color.empty = other (st.getD Color.empty) := by
+  cases st <;> rfl
+
+/-- The bounded ray walk commutes with the colour swap. -/
+theorem fold_swap (b : Board) (c : Cell) (d : Dir) :
+    ∀ (ks : List Nat),
+      ((ks.foldl (fun st k => rayStep (swapBoard b) (offset c d k) st) none) =
+        ((ks.foldl (fun st k => rayStep b (offset c d k) st) none).map other)) := by
+  have hgen : ∀ (l : List Nat) (st : Option Color),
+      ((l.foldl (fun st' k => rayStep (swapBoard b) (offset c d k) st') (st.map other)) =
+        ((l.foldl (fun st' k => rayStep b (offset c d k) st') st).map other)) := by
+    intro l
+    induction l with
+    | nil => intro st; rfl
+    | cons k rest ih =>
+      intro st
+      simp only [List.foldl_cons]
+      rw [rayStep_swap b (offset c d k) st]
+      exact ih (rayStep b (offset c d k) st)
+  intro ks
+  have this := hgen ks none
+  rw [Option.map_none] at this
+  exact this
+
+/-- First-hit colour commutes with the swap: what the swapped board sees
+at `c` is the swap of what `b` sees. -/
+theorem firstHit_swap (b : Board) (c : Cell) (d : Dir) :
+    firstHit (swapBoard b) d c = other (firstHit b d c) := by
+  unfold firstHit
+  rw [fold_swap b c d (List.range' 1 10)]
+  exact option_map_other_getD _
+
+/-- Core-only: pointwise-equal maps have equal sums. -/
+theorem sum_map_congr_gen {α : Type} (f g : α → Nat) (l : List α)
+    (h : ∀ x ∈ l, f x = g x) : (l.map f).sum = (l.map g).sum := by
+  induction l with
+  | nil => rfl
+  | cons a rest ih =>
+    simp only [List.map_cons, List.sum_cons]
+    rw [h a (List.mem_cons_self ..)]
+    rw [ih (fun x hx => h x (List.mem_cons_of_mem _ hx))]
+
+/-- **Sightline symmetry**: swapping every stack's colour swaps whose
+stacks a cell sees. This is the fact that makes the game colour-fair:
+the mirror strategy is legal for white whenever it is for red. -/
+theorem seen_swap (b : Board) (me : Color) (c : Cell) :
+    seen (swapBoard b) (other me) c = seen b me c := by
+  simp only [seen]
+  exact sum_map_congr_gen _ _ Dir.all (by
+    intro d _
+    simp only [firstHit_swap]
+    by_cases h : firstHit b d c = me
+    · rw [if_pos (by rw [h]), if_pos h]
+    · rw [if_neg (fun hc => h (other_inj hc)), if_neg h])
 
 /-! ## The total value — the fill-termination measure (Iteration 5)
 
@@ -343,6 +446,35 @@ theorem legalPlacementB_iff (b : Board) (me : Color) (c : Cell) :
     legalPlacementB b me c = true ↔ legalPlacement b me c := by
   unfold legalPlacementB legalPlacement
   simp [onBoardB, onBoard, decide_eq_true_eq]
+
+/-- **Legality symmetry** (forward): a placement legal for `other me`
+on the swapped board is legal for `me` on the original. -/
+theorem legalPlacement_swap_fwd (b : Board) (me : Color) (c : Cell)
+    (h : legalPlacement (swapBoard b) (other me) c) : legalPlacement b me c := by
+  unfold legalPlacement at h ⊢
+  obtain ⟨hon, h1, hge2, hdisj⟩ := h
+  rw [seen_swap b me c] at h1
+  rw [seen_swap b me c, seen_swap b (other me) c] at hge2
+  refine ⟨hon, h1, hge2, ?_⟩
+  rcases hdisj with hE | hlt
+  · refine Or.inl ?_
+    have hc : (swapBoard b c).color = other (b c).color := rfl
+    rw [hc, other_eq_empty] at hE
+    exact hE
+  · refine Or.inr ?_
+    rw [seen_swap b me c] at hlt
+    have hv : (swapBoard b c).value = (b c).value := rfl
+    rwa [hv] at hlt
+
+/-- **Legality symmetry**: the legal-move sets of a position and its
+colour swap correspond exactly — the rules are colour-fair. -/
+theorem legalPlacement_swap (b : Board) (me : Color) (c : Cell) :
+    legalPlacement (swapBoard b) (other me) c ↔ legalPlacement b me c := by
+  constructor
+  · exact fun h => legalPlacement_swap_fwd b me c h
+  · intro h
+    rw [← swapBoard_swap b, ← other_other me] at h
+    exact legalPlacement_swap_fwd (swapBoard b) (other me) c h
 
 /-- The row-major scanner: first legal cell in `cs`, applying the
 auto-determined stack. `cs` is `cellList` in practice. -/
