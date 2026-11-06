@@ -255,3 +255,30 @@ over the final board (the bounded-reachability pattern):
 then the succ-step's transfer lemmas (`place_zero_ok` etc.) apply
 directly to `b'` with no defeq-check needed. This is the standard
 bounded-reachability induction pattern.
+
+## Session 3 (2026-11-06) — iteration 6 GREEN
+
+The fill-termination chain is complete and green on main:
+
+- `fillStep_increase`: `subst` the scanner's board equation *before*
+  applying `totalValue_place_gt` — the goal then matches the lemma's
+  conclusion syntactically and the whnf defeq-burn disappears. Carries
+  the extra `hpos` hypothesis (totalValue_place_gt needs
+  `0 ≤ (b c).value`).
+- `seen_le_six`: NEW — sum of ≤1-per-direction indicators ≤ 6, via
+  `sum_map_le_gen` (generic sum-monotonicity) + `sum_ones` +
+  `Dir.all.length = 6` (rfl).
+- `fill_mono`: board-generalized induction — the induction quantifies
+  over the STARTING board, so the `some` branch restarts from the
+  placed board; `cases hstep : fillStep b me` + `subst hplace` keeps
+  every application syntactic. Signature changed: `me`, `n` are the
+  leading binders, well-formedness hypotheses are per-board.
+
+Gotchas recorded for future sessions: `rw` instantiates rewrite rules
+once (LHS function ≠ RHS function broke `sum_map_le_gen` — use
+`simp only`); `induction` auto-reverts hypotheses mentioning the target
+(the IH carries the membership-hypothesis arrow — apply it explicitly).
+
+6/10 iterations attempted, 6/10 green, 0 sorries. Next: It 7 (fill
+saturation counting → scanner returns none after ≤ 547 steps) and the
+C++ conformance bridge (It 5 deliverable).

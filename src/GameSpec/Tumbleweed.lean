@@ -442,74 +442,104 @@ theorem totalValue_place_gt (b : Board) (me : Color) (c : Cell) (s : Stack)
 
 set_option maxRecDepth 8000 in
 set_option maxHeartbeats 4000000 in
-/-- **The fill-step increase**: a scanner placement strictly increases
-the total value. Composes `fillStepScan_sound` with
-`totalValue_place_gt`. -/
+/-- **The fill-step increase**: one scanner placement strictly increases
+the total value. Composes `fillStepScan_sound` with `totalValue_place_gt`;
+the scanner's board equation is substituted *before* the lemma is applied
+so the conclusion matches the goal syntactically — no deep unification. -/
 theorem fillStep_increase (b : Board) (me : Color)
     (hme : me ≠ Color.empty)
     (hzero : ∀ x, (b x).color = Color.empty → (b x).value = 0)
-    (hbound : ∀ x, (b x).value.natAbs ≤ 6)
+    (hpos : ∀ x, 0 ≤ (b x).value)
     (b' : Board) (h : fillStep b me = some b') :
     totalValue b < totalValue b' := by
   obtain ⟨c, hcmem, hlegal, hplace⟩ := fillStepScan_sound b me cellList b' h
-  refine totalValue_place_gt b me c { color := me, value := seen b me c } hme
-    (fun hc => hzero c hc)
-    (by simp only [place, hplace]; exact Int.natCast_nonneg _)
-    hlegal rfl hcmem
+  subst hplace
+  exact totalValue_place_gt b me c { color := me, value := seen b me c } hme
+    (fun hc => hzero c hc) (hpos c) hlegal rfl hcmem
+
+private theorem sum_map_le_gen {α : Type} (f g : α → Nat) (l : List α)
+    (h : ∀ x ∈ l, f x ≤ g x) : (l.map f).sum ≤ (l.map g).sum := by
+  induction l with
+  | nil => exact Nat.le_refl _
+  | cons d rest ih =>
+    simp only [List.map_cons, List.sum_cons]
+    exact Nat.add_le_add (h d (List.mem_cons_self ..))
+      (ih fun x hx => h x (List.mem_cons_of_mem _ hx))
+
+private theorem sum_ones (l : List Dir) :
+    (l.map (fun _ : Dir => 1)).sum = l.length := by
+  induction l with
+  | nil => rfl
+  | cons d rest ih =>
+    rw [List.map_cons, List.sum_cons, List.length_cons, ih]
+    omega
+
+/-- **Sightline bound**: a cell sees at most one friendly stack per
+direction — six directions, so at most six. -/
+theorem seen_le_six (b : Board) (me : Color) (c : Cell) : seen b me c ≤ 6 := by
+  simp only [seen]
+  have hmem : ∀ d ∈ Dir.all,
+      (if firstHit b d c = me then 1 else 0) ≤ 1 := by
+    intro d _
+    split
+    · exact Nat.le_refl _
+    · exact Nat.zero_le _
+  have hgen := sum_map_le_gen
+    (fun d => if firstHit b d c = me then 1 else 0) (fun _ : Dir => 1) Dir.all hmem
+  have h6 : Dir.all.length = 6 := rfl
+  rw [sum_ones Dir.all, h6] at hgen
+  exact hgen
 
 set_option maxRecDepth 8000 in
-set_option maxHeartbeats 2000000 in
-/-- **Fill monotonicity and invariant preservation**: after `n` fill steps
-from a well-formed board, the board is still well-formed and the total
-value never decreased. This is the bounded-reachability induction: the
-invariants and the ≤ transfer through every placement step. -/
-theorem fill_mono (b : Board) (me : Color)
-    (hme : me ≠ Color.empty)
-    (hzero : ∀ x, (b x).color = Color.empty → (b x).value = 0)
-    (hpos : ∀ x, 0 ≤ (b x).value)
-    (hbound : ∀ x, (b x).value.natAbs ≤ 6) :
-    ∀ (n : Nat) (b' : Board), b' = fill n b me →
-      (∀ x, (b' x).color = Color.empty → (b' x).value = 0) ∧
-      (∀ x, 0 ≤ (b' x).value) ∧
-      (∀ x, (b' x).value.natAbs ≤ 6) ∧
-      totalValue b ≤ totalValue b' := by
-  intro n b'
-  induction n generalizing b' with
+set_option maxHeartbeats 4000000 in
+/-- **Fill monotonicity and invariant preservation**: `n` fuel-bounded
+fill steps from a well-formed board yield a well-formed board, and the
+total value never decreased. The induction generalizes over the starting
+board so the `some` branch can restart from the placed board. -/
+theorem fill_mono (me : Color) (hme : me ≠ Color.empty) (n : Nat) :
+    ∀ (b : Board),
+      (∀ x, (b x).color = Color.empty → (b x).value = 0) →
+      (∀ x, 0 ≤ (b x).value) →
+      (∀ x, (b x).value.natAbs ≤ 6) →
+      (∀ x, ((fill n b me) x).color = Color.empty → ((fill n b me) x).value = 0) ∧
+      (∀ x, 0 ≤ ((fill n b me) x).value) ∧
+      (∀ x, ((fill n b me) x).value.natAbs ≤ 6) ∧
+      totalValue b ≤ totalValue (fill n b me) := by
+  induction n with
   | zero =>
-    rw [fill] at hb'
-    subst hb'
-    exact ⟨hzero, hpos, hbound, Nat.le_refl _⟩
-    rw [fill] at hb'
-    subst hb'
+    intro b hzero hpos hbound
+    simp only [fill]
     exact ⟨hzero, hpos, hbound, Nat.le_refl _⟩
   | succ n ih =>
-    intro b' hb'
-    rw [fill] at hb'
-    split at hb'
-    · -- none: fill (n+1) = fill n b me — the invariants and the ≤ transfer from ih
-      obtain ⟨hz, hp, hbound, hle⟩ := ih b' rfl
-      subst hb'
-      exact ⟨hz, hp, hbound, Nat.le_trans hle (Nat.le_refl _)⟩
-    · next hb' =>
-      -- some b'': the placement on fill n b me — the invariants via the
-      -- place_* preservation lemmas, the ≤ via the increase
-      obtain ⟨c, hcmem, hlegal, hplace⟩ :=
-        fillStepScan_sound (fill n b me) me cellList b'' hb'
-      have hz' : ∀ x, (b'' x).color = Color.empty → (b'' x).value = 0 :=
-        place_zero_ok (fill n b me) c
-          { color := me, value := seen (fill n b me) c } hme hz
-      have hp' : ∀ x, 0 ≤ (b'' x).value :=
-        place_pos_ok (fill n b me) c
-          { color := me, value := seen (fill n b me) c }
-          (Nat.le_of_lt (seen_le_six (fill n b me) me c)) hpos
-      have hb'2 : ∀ x, (b'' x).value.natAbs ≤ 6 :=
-        place_bound_ok (fill n b me) c
-          { color := me, value := seen (fill n b me) c }
-          (seen_le_six (fill n b me) me c) hbound
-      have hinc := totalValue_place_gt (fill n b me) me c
-        { color := me, value := seen (fill n b me) c } hme hz' hp' hlegal rfl hcmem
-      subst hb'
-      exact ⟨hz', hp', hb'2, Nat.le_trans hle (Nat.le_of_lt hinc)⟩
+    intro b hzero hpos hbound
+    cases hstep : fillStep b me with
+    | none =>
+      -- no legal placement anywhere: fill is sticky at `b`
+      simp only [fill, hstep]
+      exact ⟨hzero, hpos, hbound, Nat.le_refl _⟩
+    | some b'' =>
+      simp only [fill, hstep]
+      obtain ⟨c, hcmem, hlegal, hplace⟩ := fillStepScan_sound b me cellList b'' hstep
+      subst hplace
+      have hz'' := place_zero_ok b c { color := me, value := seen b me c } hme hzero
+      have hp'' : ∀ x, 0 ≤ (place b c { color := me, value := seen b me c } x).value := by
+        intro x
+        simp only [place]
+        by_cases hxc : x = c
+        · rw [if_pos hxc]
+          exact Int.natCast_nonneg _
+        · rw [if_neg hxc]
+          exact hpos x
+      have hsb : ({ color := me, value := seen b me c } : Stack).value.natAbs ≤ 6 := by
+        have h6 := seen_le_six b me c
+        show (seen b me c : Int).natAbs ≤ 6
+        omega
+      have hb'' := place_bound_ok b c { color := me, value := seen b me c } hsb hbound
+      obtain ⟨iz, ip, ib, imono⟩ := ih (place b c { color := me, value := seen b me c })
+        hz'' hp'' hb''
+      have hinc := fillStep_increase b me hme hzero hpos
+        (place b c { color := me, value := seen b me c }) hstep
+      exact ⟨iz, ip, ib, Nat.le_trans (Nat.le_of_lt hinc) imono⟩
 
 /-! ## Empty-board sanity -/
 
