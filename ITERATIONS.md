@@ -282,3 +282,19 @@ once (LHS function ≠ RHS function broke `sum_map_le_gen` — use
 6/10 iterations attempted, 6/10 green, 0 sorries. Next: It 7 (fill
 saturation counting → scanner returns none after ≤ 547 steps) and the
 C++ conformance bridge (It 5 deliverable).
+
+## Session 3 addendum 3 (2026-11-06) — iteration 10 GREEN, loop complete
+
+The extraction matrix (`EXTRACTION.md`) maps all 62 Lean declarations to
+their C++ mirrors in `tumbleweed/tests/conformance.cpp` with the three
+verification channels (lake build / conformance binary / CI). The
+research loop is complete: 10/10 iterations attempted, 10/10 green,
+0 sorries, zero dependencies beyond Lean 4 core.
+
+Final theorem inventory: axial geometry, sightline congruences,
+`seen_place_self` (keystone), placement legality + both no-recapture
+theorems, scanner soundness + completeness, the totalValue termination
+chain (`totalValue_place_gt` → `seen_le_six` → `fill_mono` →
+`fill_stable_of_big` → `fillStep_none_of_cap` → `fill_547_empty`), the
+empty-board fixpoint, and the red/white colour symmetry
+(`seen_swap` + `legalPlacement_swap`).
