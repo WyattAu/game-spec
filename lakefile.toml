@@ -1,5 +1,8 @@
 name = "game-spec"
 version = "0.1.0"
+description = "Formal specifications and Lean 4 proofs for the WyattAu competition bots. Axial hex geometry, sightlines, and no-recapture theorems for Tumbleweed. Zero-sorry, core-only (no mathlib)."
+keywords = ["formal-verification", "game-theory", "hex", "specification"]
+license = "MIT"
 defaultTargets = ["GameSpec"]
 
 [[lean_lib]]
